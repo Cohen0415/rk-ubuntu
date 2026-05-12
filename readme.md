@@ -23,6 +23,9 @@ chips/
 versions/
   22.04/
     sources.list
+
+common/
+  overlay/
 ```
 
 When multiple chips are present, `mk-base-ubuntu.sh` and `mk-rootfs-ubuntu.sh`
@@ -44,6 +47,10 @@ names that differ, such as the AIQ package path.
 
 Ubuntu release-specific files belong under `versions/<ubuntu-version>/`, for
 example `versions/22.04/sources.list`.
+
+Shared rootfs overlay files belong under `common/overlay/`. The build copies
+`common/overlay/` first, then copies `chips/<chip>/overlay/` so chip-specific
+files can override common defaults.
 
 ## Available Distro
 

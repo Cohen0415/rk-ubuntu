@@ -45,7 +45,12 @@ else
     exit 1
 fi
 
-# overlay folder
+# common overlay folder
+if [ -d "$RK_UBUNTU_COMMON_OVERLAY_DIR" ]; then
+    sudo cp -rpf "$RK_UBUNTU_COMMON_OVERLAY_DIR"/. $TARGET_ROOTFS_DIR/
+fi
+
+# chip overlay folder
 if [ -d "$RK_UBUNTU_OVERLAY_DIR" ]; then
     sudo cp -rpf "$RK_UBUNTU_OVERLAY_DIR"/. $TARGET_ROOTFS_DIR/
 fi
