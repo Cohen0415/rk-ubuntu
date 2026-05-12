@@ -83,9 +83,12 @@ ID=$(stat --format %u $TARGET_ROOTFS_DIR)
 cat << EOF | sudo chroot $TARGET_ROOTFS_DIR
 
 export DEBIAN_FRONTEND=noninteractive
-export APT_INSTALL="apt-get install -fy --allow-downgrades"
+export DEBCONF_NONINTERACTIVE_SEEN=true
+export APT_GET="apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+export APT_INSTALL="\${APT_GET} install -fy --allow-downgrades"
 RKAIQ_DEB="$RK_UBUNTU_RKAIQ_DEB"
 GPU_DEBS="$RK_UBUNTU_GPU_DEBS"
+VERSION="${VERSION:-release}"
 
 # Fixup owners
 if [ "$ID" -ne 0 ]; then
@@ -98,12 +101,12 @@ done
 ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 apt-get update
-apt-get upgrade -y
+\${APT_GET} upgrade -y
 
 chmod o+x /usr/lib/dbus-1.0/dbus-daemon-launch-helper
 chmod +x /etc/rc.local
 
-apt purge initramfs-tools -y
+\${APT_GET} purge initramfs-tools -y
 
 \${APT_INSTALL} dialog toilet u-boot-tools edid-decode logrotate
 if [[ "$TARGET" == "desktop" ]]; then
@@ -120,6 +123,12 @@ cp /etc/Powermanager/triggerhappy.service  /lib/systemd/system/triggerhappy.serv
 sed -i "s/#HandlePowerKey=.*/HandlePowerKey=ignore/" /etc/systemd/logind.conf
 
 echo -e "\033[47;36m ----------- GPU  ----------- \033[0m"
+if ls /packages/libgpgerror/*.deb >/dev/null 2>&1; then
+    \${APT_INSTALL} /packages/libgpgerror/*.deb
+fi
+if ls /packages/libgcrypt20/*.deb >/dev/null 2>&1; then
+    \${APT_INSTALL} /packages/libgcrypt20/*.deb
+fi
 for deb in \$GPU_DEBS; do
     if [ -e "\$deb" ]; then
         \${APT_INSTALL} "\$deb"
@@ -135,20 +144,48 @@ if [ -n "\$RKAIQ_DEB" ] && [ -e "\$RKAIQ_DEB" ]; then
 fi
 
 echo -e "\033[47;36m ----------- RGA  ----------- \033[0m"
-\${APT_INSTALL} /packages/rga2/*.deb
+if ls /packages/rga2/*.deb >/dev/null 2>&1; then
+    \${APT_INSTALL} /packages/rga2/*.deb
+fi
 
 if [[ "$TARGET" == "desktop" ]]; then
     echo -e "\033[47;36m ------ Setup Video---------- \033[0m"
     \${APT_INSTALL} gstreamer1.0-plugins-bad gstreamer1.0-plugins-base gstreamer1.0-plugins-ugly gstreamer1.0-tools gstreamer1.0-alsa \
     gstreamer1.0-plugins-base-apps
 
-    \${APT_INSTALL} /packages/mpp/*
-    \${APT_INSTALL} /packages/gst-rkmpp/*.deb
-    \${APT_INSTALL} /packages/gstreamer/*.deb
+    if ls /packages/mpp/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/mpp/*.deb
+    fi
+    if ls /packages/gst-rkmpp/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/gst-rkmpp/*.deb
+    fi
+    if ls /packages/gstreamer/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/gstreamer/*.deb
+    fi
 elif [ "$TARGET" == "base" ]; then
     echo -e "\033[47;36m ------ Setup Video---------- \033[0m"
-    \${APT_INSTALL} /packages/mpp/*
-    \${APT_INSTALL} /packages/gst-rkmpp/*.deb
+    if ls /packages/mpp/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/mpp/*.deb
+    fi
+    if ls /packages/gst-rkmpp/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/gst-rkmpp/*.deb
+    fi
+fi
+
+if [[ "$TARGET" == "desktop" ]]; then
+    echo -e "\033[47;36m ---- Reinstall GStreamer ---- \033[0m"
+    if ls /packages/gstreamer/*.deb >/dev/null 2>&1; then
+        dpkg -i /packages/gstreamer/*.deb || \${APT_GET} install -f -y
+    fi
+    if ls /packages/gst-plugins-base1.0/*.deb >/dev/null 2>&1; then
+        dpkg -i /packages/gst-plugins-base1.0/*.deb || \${APT_GET} install -f -y
+    fi
+    if ls /packages/gst-plugins-good1.0/*.deb >/dev/null 2>&1; then
+        dpkg -i /packages/gst-plugins-good1.0/*.deb || \${APT_GET} install -f -y
+    fi
+    if ls /packages/gst-plugins-bad1.0/*.deb >/dev/null 2>&1; then
+        dpkg -i --force-overwrite /packages/gst-plugins-bad1.0/*.deb || \${APT_GET} install -f -y
+    fi
 fi
 
 if [[ "$TARGET" == "desktop" ]]; then
@@ -162,6 +199,18 @@ fi
 if [[ "$TARGET" == "desktop" ]]; then
     echo -e "\033[47;36m ----- Install Camera ------- \033[0m"
     \${APT_INSTALL} cheese v4l-utils
+    if ls /packages/libv4l/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/libv4l/*.deb
+    fi
+    if ls /packages/rkisp/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/rkisp/*.deb
+    fi
+    if [ -d /etc/3A ]; then
+        mkdir -p /etc/iqfiles
+        [ -d /etc/3A/bin ] && mv /etc/3A/bin/* /usr/bin/ 2>/dev/null || true
+        [ -d /etc/3A/iqfiles ] && mv /etc/3A/iqfiles/* /etc/iqfiles/ 2>/dev/null || true
+        rm -rf /etc/3A
+    fi
 
     echo -e "\033[47;36m ----- Wayland/Weston ------- \033[0m"
     \${APT_INSTALL} libseat-dev
@@ -171,7 +220,10 @@ if [[ "$TARGET" == "desktop" ]]; then
     # \${APT_INSTALL} /packages/openbox/*.deb
 
     echo -e "\033[47;36m ------ update chromium ----- \033[0m"
-    \${APT_INSTALL} /packages/chromium/*.deb
+    if ls /packages/chromium/*.deb >/dev/null 2>&1; then
+        \${APT_INSTALL} /packages/chromium/*.deb
+    fi
+    \${APT_GET} purge tilix -y || true
 
     # echo -e "\033[47;36m --------- firefox-esr ------ \033[0m"
     # \${APT_INSTALL} /packages/firefox/*.deb
@@ -184,15 +236,34 @@ if [[ "$TARGET" == "desktop" ]]; then
     fi
 fi
 
-if [ -e "/usr/lib/aarch64-linux-gnu" ]; then
-    echo -e "\033[47;36m ------- move rknpu2 --------- \033[0m"
-    mv /packages/rknpu2/rknpu2.tar  /
+echo -e "\033[47;36m ----- Install Wi-Fi/BT ------ \033[0m"
+if ls /packages/rkwifibt/*.deb >/dev/null 2>&1; then
+    \${APT_INSTALL} /packages/rkwifibt/*.deb
+    mkdir -p /vendor/etc
+    if [ ! -e /vendor/etc/firmware ]; then
+        ln -s /system/etc/firmware /vendor/etc/firmware
+    fi
+    [ -e /etc/wifi/rkwifibt.sh ] && mv /etc/wifi/rkwifibt.sh /etc/init.d/
+    [ -e /etc/wifi/rk_wifi_init ] && mv /etc/wifi/rk_wifi_init /usr/bin/
+    rm -rf /etc/wifi
+fi
+
+if [ "$VERSION" = "debug" ] && ls /packages/glmark2/*.deb >/dev/null 2>&1; then
+    echo -e "\033[47;36m ------ Install glmark ------- \033[0m"
+    \${APT_INSTALL} /packages/glmark2/*.deb
+fi
+
+if [ -e "/usr/lib/aarch64-linux-gnu" ] && [ -e /packages/rknpu2/rknpu2.tar ]; then
+    echo -e "\033[47;36m ------- install rknpu2 ------- \033[0m"
+    tar -xvf /packages/rknpu2/rknpu2.tar -C /
 fi
 
 echo -e "\033[47;36m ----- Install rktoolkit ----- \033[0m"
-\${APT_INSTALL} /packages/rktoolkit/*.deb
+if ls /packages/rktoolkit/*.deb >/dev/null 2>&1; then
+    \${APT_INSTALL} /packages/rktoolkit/*.deb
+fi
 
-apt autoremove -y
+\${APT_GET} autoremove -y
 
 # mark package to hold
 apt list --upgradable | cut -d/ -f1 | xargs apt-mark hold
@@ -200,8 +271,9 @@ apt list --upgradable | cut -d/ -f1 | xargs apt-mark hold
 echo -e "\033[47;36m ------- Custom Script ------- \033[0m"
 systemctl mask systemd-networkd-wait-online.service
 systemctl mask NetworkManager-wait-online.service
-systemctl disable hostapd
-rm /lib/systemd/system/wpa_supplicant@.service
+systemctl disable hostapd || true
+systemctl enable rkwifibt.service || true
+rm -f /lib/systemd/system/wpa_supplicant@.service
 
 echo -e "\033[47;36m  ---------- Clean ----------- \033[0m"
 if [ -n "\$GPU_DEBS" ] && [ -e "/usr/lib/arm-linux-gnueabihf/dri" ] ;

@@ -8,11 +8,12 @@ is_mounted()
 mnt()
 {
     echo "MOUNTING"
-    sudo mkdir -p "${2}/proc" "${2}/sys" "${2}/dev"
+    sudo mkdir -p "${2}/proc" "${2}/sys" "${2}/dev" "${2}/dev/pts"
 
     is_mounted "${2}/proc" || sudo mount -t proc /proc "${2}/proc"
     is_mounted "${2}/sys" || sudo mount -t sysfs /sys "${2}/sys"
     is_mounted "${2}/dev" || sudo mount -o bind /dev "${2}/dev"
+    is_mounted "${2}/dev/pts" || sudo mount -t devpts devpts "${2}/dev/pts"
 }
 
 umount_one()
@@ -25,6 +26,7 @@ umount_one()
 umnt()
 {
     echo "UNMOUNTING"
+    umount_one "${2}/dev/pts"
     umount_one "${2}/proc"
     umount_one "${2}/sys"
     umount_one "${2}/dev"
