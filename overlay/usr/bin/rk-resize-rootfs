@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+MARKER=/var/lib/rk-resize-rootfs.done
+
+[ -e "$MARKER" ] && exit 0
+
+ROOT_DEV=$(findmnt -nro SOURCE /)
+[ -b "$ROOT_DEV" ] || ROOT_DEV=$(realpath "/dev/block/$(mountpoint -d /)" 2>/dev/null)
+[ -b "$ROOT_DEV" ] || exit 0
+
+resize2fs "$ROOT_DEV"
+mkdir -p "$(dirname "$MARKER")"
+touch "$MARKER"

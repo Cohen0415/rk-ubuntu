@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+
+USERDATA_DEV=$(findmnt -nro SOURCE /userdata 2>/dev/null || true)
+[ -b "$USERDATA_DEV" ] || exit 0
+
+resize2fs "$USERDATA_DEV" || true

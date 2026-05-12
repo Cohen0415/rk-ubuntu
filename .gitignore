@@ -1,0 +1,5 @@
+ubuntu-*.tar.gz
+*.img
+binary
+overlay/usr/lib/modules/
+.ubuntu_build.meta

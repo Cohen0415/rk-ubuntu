@@ -1,0 +1,12 @@
+[Unit]
+Description=Resize root filesystem once
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=local-fs.target gdm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rk-resize-rootfs
+
+[Install]
+WantedBy=sysinit.target

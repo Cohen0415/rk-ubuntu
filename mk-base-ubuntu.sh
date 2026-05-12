@@ -1,0 +1,211 @@
+#!/bin/bash -e
+
+if [ "$ARCH" == "armhf" ]; then
+	ARCH='armhf'
+elif [ "$ARCH" == "arm64" ]; then
+	ARCH='arm64'
+else
+    ARCH="arm64"
+    echo -e "\033[47;36m set default ARCH=arm64...... \033[0m"
+fi
+
+TARGET_ROOTFS_DIR="binary"
+FILENAME="ubuntu-base-$UBUNTU_VERSION-base-$ARCH.tar.gz"
+
+cleanup()
+{
+    ./ch-mount.sh -u "$TARGET_ROOTFS_DIR" >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT INT TERM
+
+sudo rm -rf $TARGET_ROOTFS_DIR/
+
+if [ ! -d $TARGET_ROOTFS_DIR ] ; then
+
+    sudo mkdir -p $TARGET_ROOTFS_DIR
+
+    URL="http://cdimage.ubuntu.com/ubuntu-base/releases/$UBUNTU_VERSION/release/$FILENAME"
+    
+    if [ ! -f "$FILENAME" ]; then
+        echo "File $FILENAME does not exist."
+        echo -e "\033[47;36m wget $URL \033[0m"
+
+        if command -v wget >/dev/null 2>&1; then
+            wget "$URL"
+        elif command -v curl >/dev/null 2>&1; then
+            curl -O "$URL"
+        else
+            echo "Error: Neither wget nor curl is installed. Please install one of them to proceed."
+            exit 1
+        fi
+
+        if [ -f "$FILENAME" ]; then
+            echo "Download $FILENAME completed successfully."
+        else
+            echo "Error: Download $FILENAME failed."
+            exit 1
+        fi
+    fi
+
+    echo -e "\033[47;36m sudo tar -xzf $FILENAME -C $TARGET_ROOTFS_DIR/ \033[0m"
+    sudo tar -xzf $FILENAME -C $TARGET_ROOTFS_DIR/
+    sudo cp sources.list $TARGET_ROOTFS_DIR/etc/apt/sources.list
+    sudo cp -b /etc/resolv.conf $TARGET_ROOTFS_DIR/etc/resolv.conf
+
+    if [ "$ARCH" == "armhf" ]; then
+	    sudo cp -b /usr/bin/qemu-arm-static $TARGET_ROOTFS_DIR/usr/bin/
+    elif [ "$ARCH" == "arm64"  ]; then
+	    sudo cp -b /usr/bin/qemu-aarch64-static $TARGET_ROOTFS_DIR/usr/bin/
+    fi
+fi
+
+echo -e "\033[47;36m Change root.................... \033[0m"
+
+./ch-mount.sh -m $TARGET_ROOTFS_DIR
+
+cat <<EOF | sudo chroot $TARGET_ROOTFS_DIR/
+
+export DEBIAN_FRONTEND=noninteractive
+export APT_INSTALL="apt-get install -fy --allow-downgrades"
+
+export LC_ALL=C.UTF-8
+
+apt-get -y update
+apt-get -f -y upgrade
+
+if [ "$TARGET" == "base" ]; then
+    apt-get install -y rsyslog sudo dialog apt-utils ntp evtest acpid
+elif [ "$TARGET" == "desktop" ]; then
+    DEBIAN_FRONTEND=noninteractive apt install -y ubuntu-desktop-minimal rsyslog sudo dialog apt-utils ntp evtest onboard
+    mv /var/lib/dpkg/info/ /var/lib/dpkg/info_old/
+    mkdir /var/lib/dpkg/info/
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt install -y ubuntu-desktop-minimal rsyslog sudo dialog apt-utils ntp evtest onboard
+    mv /var/lib/dpkg/info_old/* /var/lib/dpkg/info/
+fi
+
+\${APT_INSTALL} net-tools openssh-server ifupdown alsa-utils ntp network-manager gdb inetutils-ping libssl-dev \
+    vsftpd tcpdump can-utils i2c-tools strace vim iperf3 ethtool netplan.io toilet htop pciutils usbutils curl \
+    whiptail gnupg bc gdisk parted gcc sox libsox-fmt-all gpiod libgpiod-dev python3-pip python3-libgpiod \
+    u-boot-tools bash-completion
+
+\${APT_INSTALL} ttf-wqy-zenhei xfonts-intl-chinese
+
+if [[ "$TARGET" == "desktop" ]]; then
+    apt purge ibus firefox -y
+
+    \${APT_INSTALL} xinput guvcview gnome-shell x11vnc
+
+    echo -e "\033[47;36m Install Chinese fonts.................... \033[0m"
+    \${APT_INSTALL} language-pack-zh-hans fonts-noto-cjk-extra gnome-user-docs-zh-hans language-pack-gnome-zh-hans
+
+    # set default xinput for fcitx
+    \${APT_INSTALL} fcitx fcitx-table fcitx-googlepinyin fcitx-pinyin fcitx-config-gtk
+    sed -i 's/default/fcitx/g' /etc/X11/xinit/xinputrc
+
+    \${APT_INSTALL} ipython3 jupyter
+fi
+
+if [[ "$TARGET" == "desktop" ]]; then
+    # Uncomment zh_CN.UTF-8 for inclusion in generation
+    sed -i 's/^# *\(zh_CN.UTF-8\)/\1/' /etc/locale.gen
+    echo "LANG=zh_CN.UTF-8" >> /etc/default/locale
+
+    # Generate locale
+    locale-gen zh_CN.UTF-8
+
+    # Export env vars
+    echo "LC_ALL=zh_CN.UTF-8" >> /etc/environment    
+    echo "LANG=zh_CN.UTF-8" >> /etc/environment
+    echo "LANGUAGE=zh_CN:zh:en_US:en" >> /etc/environment
+
+    echo "export LC_ALL=zh_CN.UTF-8" >> /etc/profile.d/zh_CN.sh
+    echo "export LANG=zh_CN.UTF-8" >> /etc/profile.d/zh_CN.sh
+    echo "export LANGUAGE=zh_CN:zh:en_US:en" >> /etc/profile.d/zh_CN.sh
+
+    \${APT_INSTALL} $(check-language-support)
+fi
+
+if [[ "$TARGET" == "desktop" ]]; then
+    \${APT_INSTALL} mpv acpid gnome-sound-recorder
+fi
+
+pip3 install python-periphery Adafruit-Blinka -i https://mirrors.aliyun.com/pypi/simple/
+
+HOST=rk3568-ubuntu
+
+# Create User
+useradd -G sudo -m -s /bin/bash xfanic
+passwd xfanic <<IEOF
+123456
+123456
+IEOF
+gpasswd -a xfanic video
+gpasswd -a xfanic audio
+passwd root <<IEOF
+root
+root
+IEOF
+
+# allow root login
+sed -i '/pam_securetty.so/s/^/# /g' /etc/pam.d/login
+
+# hostname
+echo rk3568-ubuntu > /etc/hostname
+echo "$TARGET" > /etc/ubuntu-target
+
+# set localtime
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+# workaround 90s delay
+services=(NetworkManager systemd-networkd)
+for service in ${services[@]}; do
+    systemctl mask ${service}-wait-online.service
+done
+
+# disbale the wire/nl80211
+systemctl mask wpa_supplicant-wired@
+systemctl mask wpa_supplicant-nl80211@
+systemctl mask wpa_supplicant@
+
+# Make systemd less spammy
+
+sed -i 's/#LogLevel=info/LogLevel=warning/' \
+  /etc/systemd/system.conf
+
+sed -i 's/#LogTarget=journal-or-kmsg/LogTarget=journal/' \
+  /etc/systemd/system.conf
+
+# check to make sure sudoers file has ref for the sudo group
+SUDOEXISTS="$(awk '$1 == "%sudo" { print $1 }' /etc/sudoers)"
+if [ -z "$SUDOEXISTS" ]; then
+    # append sudo entry to sudoers
+    echo "# Members of the sudo group may gain root privileges" >> /etc/sudoers
+    echo "%sudo	ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+fi
+
+# make sure that NOPASSWD is set for %sudo
+# expecially in the case that we didn't add it to /etc/sudoers
+# just blow the %sudo line away and force it to be NOPASSWD
+sed -i -e '
+/\%sudo/ c \
+%sudo    ALL=(ALL) NOPASSWD: ALL
+' /etc/sudoers
+
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+sync
+
+EOF
+cleanup
+trap - EXIT INT TERM
+
+if [ -e ubuntu-base-$UBUNTU_VERSION-$TARGET-$ARCH-*.tar.gz ]; then
+    sudo rm ubuntu-base-$UBUNTU_VERSION-$TARGET-$ARCH-*.tar.gz 
+fi
+
+DATE=$(date +%Y%m%d)
+echo -e "\033[47;36m tar zcf ubuntu-base-$UBUNTU_VERSION-$TARGET-$ARCH-$DATE.tar.gz \033[0m"
+sudo tar zcf ubuntu-base-$UBUNTU_VERSION-$TARGET-$ARCH-$DATE.tar.gz $TARGET_ROOTFS_DIR

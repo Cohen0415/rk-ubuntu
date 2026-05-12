@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+#    01-help-text - print the help text associated with the distro
+
+TARGET_NAME="$(cat /etc/ubuntu-target 2>/dev/null)"
+case "$TARGET_NAME" in
+    desktop) SYSTEM_NAME="Ubuntu Desktop" ;;
+    base) SYSTEM_NAME="Ubuntu Base" ;;
+    *) SYSTEM_NAME="Ubuntu" ;;
+esac
+
+printf "\n"
+printf " * Board:      RK3568\n"
+printf " * System:     %s\n" "$SYSTEM_NAME"
+printf " * Hostname:   %s\n" "$(hostname)"

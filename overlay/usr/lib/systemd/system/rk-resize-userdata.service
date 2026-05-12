@@ -1,0 +1,11 @@
+[Unit]
+Description=Resize userdata filesystem
+After=userdata.mount
+RequiresMountsFor=/userdata
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rk-resize-userdata
+
+[Install]
+WantedBy=multi-user.target

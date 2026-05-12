@@ -1,0 +1,15 @@
+[Unit]
+Description=Attach AP6275P Bluetooth UART
+ConditionPathExists=/dev/ttyS1
+After=systemd-rfkill.service dev-ttyS1.device bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'command -v rfkill >/dev/null 2>&1 && rfkill unblock bluetooth || true'
+ExecStart=/usr/bin/hciattach -n -s 115200 /dev/ttyS1 bcm43xx 1500000 flow
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
