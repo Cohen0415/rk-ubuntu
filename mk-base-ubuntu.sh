@@ -1,5 +1,13 @@
 #!/bin/bash -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/common/chip.sh"
+rk_ubuntu_load_chip
+
+UBUNTU_VERSION="${UBUNTU_VERSION:-22.04}"
+TARGET="${TARGET:-desktop}"
+RK_UBUNTU_SOURCES_LIST="${RK_UBUNTU_SOURCES_LIST:-$SCRIPT_DIR/versions/$UBUNTU_VERSION/sources.list}"
+
 if [ "$ARCH" == "armhf" ]; then
 	ARCH='armhf'
 elif [ "$ARCH" == "arm64" ]; then
@@ -50,7 +58,11 @@ if [ ! -d $TARGET_ROOTFS_DIR ] ; then
 
     echo -e "\033[47;36m sudo tar -xzf $FILENAME -C $TARGET_ROOTFS_DIR/ \033[0m"
     sudo tar -xzf $FILENAME -C $TARGET_ROOTFS_DIR/
-    sudo cp sources.list $TARGET_ROOTFS_DIR/etc/apt/sources.list
+    if [ -f "$RK_UBUNTU_SOURCES_LIST" ]; then
+        sudo cp "$RK_UBUNTU_SOURCES_LIST" $TARGET_ROOTFS_DIR/etc/apt/sources.list
+    else
+        echo "No sources.list found for Ubuntu $UBUNTU_VERSION: $RK_UBUNTU_SOURCES_LIST"
+    fi
     sudo cp -b /etc/resolv.conf $TARGET_ROOTFS_DIR/etc/resolv.conf
 
     if [ "$ARCH" == "armhf" ]; then
@@ -133,7 +145,7 @@ fi
 
 pip3 install python-periphery Adafruit-Blinka -i https://mirrors.aliyun.com/pypi/simple/
 
-HOST=rk3568-ubuntu
+HOST="$RK_UBUNTU_HOSTNAME"
 
 # Create User
 useradd -G sudo -m -s /bin/bash xfanic
@@ -152,7 +164,8 @@ IEOF
 sed -i '/pam_securetty.so/s/^/# /g' /etc/pam.d/login
 
 # hostname
-echo rk3568-ubuntu > /etc/hostname
+echo "\$HOST" > /etc/hostname
+echo "$RK_UBUNTU_CHIP" > /etc/ubuntu-chip
 echo "$TARGET" > /etc/ubuntu-target
 
 # set localtime
@@ -160,8 +173,8 @@ ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 # workaround 90s delay
 services=(NetworkManager systemd-networkd)
-for service in ${services[@]}; do
-    systemctl mask ${service}-wait-online.service
+for service in \${services[@]}; do
+    systemctl mask \${service}-wait-online.service
 done
 
 # disbale the wire/nl80211
