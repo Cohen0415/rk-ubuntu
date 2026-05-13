@@ -146,15 +146,17 @@ fi
 pip3 install python-periphery Adafruit-Blinka -i https://mirrors.aliyun.com/pypi/simple/
 
 HOST="$RK_UBUNTU_HOSTNAME"
+USER_NAME="$RK_UBUNTU_USER"
+USER_PASSWORD="$RK_UBUNTU_PASSWORD"
 
 # Create User
-useradd -G sudo -m -s /bin/bash xfanic
-passwd xfanic <<IEOF
-123456
-123456
+useradd -G sudo -m -s /bin/bash "\$USER_NAME"
+passwd "\$USER_NAME" <<IEOF
+\$USER_PASSWORD
+\$USER_PASSWORD
 IEOF
-gpasswd -a xfanic video
-gpasswd -a xfanic audio
+gpasswd -a "\$USER_NAME" video
+gpasswd -a "\$USER_NAME" audio
 passwd root <<IEOF
 root
 root

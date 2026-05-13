@@ -104,11 +104,17 @@ export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 export APT_GET="apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
 export APT_INSTALL="\${APT_GET} install -fy --allow-downgrades"
+export RK_UBUNTU_USER="$RK_UBUNTU_USER"
 VERSION="${VERSION:-release}"
 
 # Fixup owners
 if [ "$ID" -ne 0 ]; then
-       find / -user $ID -exec chown -h 0:0 {} \;
+       find / \
+           -path /proc -prune -o \
+           -path /sys -prune -o \
+           -path /dev -prune -o \
+           -path /run -prune -o \
+           -user $ID -exec chown -h 0:0 {} \;
 fi
 for u in \$(ls /home/); do
 	chown -h -R \$u:\$u /home/\$u
@@ -151,7 +157,7 @@ install_dpkg_force_overwrite_glob()
 process_apt_list()
 {
     local list_file="\$1"
-    local line action args src dst
+    local line action args src dst pkg
 
     [ -f "\$list_file" ] || return 0
     echo -e "\033[47;36m ---- Apt list: \$list_file ---- \033[0m"
@@ -191,7 +197,11 @@ process_apt_list()
                 [ -n "\$args" ] && apt-mark hold \$args
                 ;;
             purge)
-                [ -n "\$args" ] && \${APT_GET} purge -y \$args || true
+                for pkg in \$args; do
+                    if dpkg-query -W -f='\${db:Status-Abbrev}' "\$pkg" 2>/dev/null | grep -q '^i'; then
+                        \${APT_GET} purge -y "\$pkg" || true
+                    fi
+                done
                 ;;
             extract)
                 read -r src dst << EXTRACT_ARGS
@@ -226,14 +236,13 @@ process_apt_list /tmp/rk-ubuntu-apt-lists/chip/common.list
 if [[ "$TARGET" == "desktop" ]]; then
     process_apt_list /tmp/rk-ubuntu-apt-lists/common/desktop.list
     process_apt_list /tmp/rk-ubuntu-apt-lists/chip/desktop.list
+    process_apt_list /tmp/rk-ubuntu-apt-lists/common/desktop.list
 elif [ "$TARGET" == "base" ]; then
     process_apt_list /tmp/rk-ubuntu-apt-lists/common/base.list
     process_apt_list /tmp/rk-ubuntu-apt-lists/chip/base.list
 fi
 
 run_post_install_hooks
-
-\${APT_GET} autoremove -y
 
 # mark package to hold
 apt list --upgradable | cut -d/ -f1 | xargs apt-mark hold
