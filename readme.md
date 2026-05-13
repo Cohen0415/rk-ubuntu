@@ -11,6 +11,8 @@ This repository keeps chip-specific Ubuntu resources under `chips/<chip>/`.
 chips/
   rk3568/
     chip.conf
+    apt-lists/
+    post-install.d/
     packages/arm64/
     overlay/
     overlay-firmware/
@@ -25,7 +27,9 @@ versions/
     sources.list
 
 common/
+  apt-lists/
   overlay/
+  post-install.d/
 ```
 
 When multiple chips are present, `mk-base-ubuntu.sh` and `mk-rootfs-ubuntu.sh`
@@ -41,9 +45,8 @@ TARGET=desktop ./mk-image.sh
 `UBUNTU_VERSION` defaults to `22.04`, `TARGET` defaults to `desktop`, and
 `ARCH` defaults to `arm64` when they are not provided.
 
-To add rk3576 or rk3588, put its packages and overlays under the matching
-`chips/<chip>/` directory, then update `chips/<chip>/chip.conf` for package
-names that differ, such as the AIQ package path.
+To add rk3576 or rk3588, put its packages, package install lists, post-install
+hooks, and overlays under the matching `chips/<chip>/` directory.
 
 Ubuntu release-specific files belong under `versions/<ubuntu-version>/`, for
 example `versions/22.04/sources.list`.
@@ -51,6 +54,42 @@ example `versions/22.04/sources.list`.
 Shared rootfs overlay files belong under `common/overlay/`. The build copies
 `common/overlay/` first, then copies `chips/<chip>/overlay/` so chip-specific
 files can override common defaults.
+
+## Package install lists
+
+`mk-rootfs-ubuntu.sh` installs packages from list files instead of hard-coding
+chip package paths in the main script.
+
+```
+common/apt-lists/common.list
+common/apt-lists/base.list
+common/apt-lists/desktop.list
+chips/<chip>/apt-lists/common.list
+chips/<chip>/apt-lists/base.list
+chips/<chip>/apt-lists/desktop.list
+```
+
+Each non-empty line starts with an action:
+
+```
+apt package-name another-package
+deb /packages/some-dir/*.deb
+dpkg /packages/some-dir/*.deb
+dpkg-force-overwrite /packages/some-dir/*.deb
+debug-deb /packages/glmark2/*.deb
+hold package-name
+purge package-name
+extract /packages/rknpu2/rknpu2.tar /
+```
+
+Use `apt` for repository packages, `deb` for local `.deb` packages that apt can
+resolve, `dpkg` when a package set must be reinstalled in place, and
+`dpkg-force-overwrite` for package sets that intentionally overwrite files from
+existing packages.
+
+Non-package fixups belong in `common/post-install.d/*.sh` or
+`chips/<chip>/post-install.d/*.sh`. For example, rk3576 uses hooks for camera
+3A file placement and Wi-Fi/BT package layout cleanup.
 
 ## Available Distro
 

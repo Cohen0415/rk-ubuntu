@@ -1,0 +1,10 @@
+# rk3568 local packages.
+
+deb /packages/libmali/libmali-bifrost-g52-g13p0-x11-wayland-gbm_1.9-1_arm64.deb
+deb /packages/libdrm/*.deb
+deb /packages/rkaiq/camera_engine_rkaiq_rk3568_arm64.deb
+deb /packages/rga2/*.deb
+deb /packages/mpp/*.deb
+deb /packages/gst-rkmpp/*.deb
+extract /packages/rknpu2/rknpu2.tar /
+deb /packages/rktoolkit/*.deb

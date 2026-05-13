@@ -1,0 +1,10 @@
+apt gstreamer1.0-plugins-bad gstreamer1.0-plugins-base gstreamer1.0-plugins-ugly gstreamer1.0-tools gstreamer1.0-alsa gstreamer1.0-plugins-base-apps
+dpkg /packages/gstreamer/*.deb
+deb /packages/xserver/*.deb
+hold xserver-common xserver-xorg-core xserver-xorg-legacy xserver-xorg-dev
+apt cheese v4l-utils
+deb /packages/libv4l/*.deb
+deb /packages/rkisp/*.deb
+deb /packages/chromium/*.deb
+purge tilix
+deb /packages/libdrm-cursor/*.deb
