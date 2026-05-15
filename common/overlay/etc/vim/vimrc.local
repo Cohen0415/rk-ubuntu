@@ -1,0 +1,8 @@
+" Keep Vim conservative on serial consoles and simple SSH terminals.
+set nocompatible
+set mouse=
+set t_RV=
+set t_u7=
+set t_BE=
+set t_RS=
+set ttyfast

@@ -3,3 +3,4 @@
 
 apt dialog toilet u-boot-tools edid-decode logrotate
 apt pm-utils triggerhappy bsdmainutils
+apt xterm

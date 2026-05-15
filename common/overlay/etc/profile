@@ -26,7 +26,6 @@ if [ -d /etc/profile.d ]; then
   unset i
 fi
 
-if tty -s; then
-  stty columns 200
-  stty rows 50
+if [ -x /usr/bin/resize ];then
+  /usr/bin/resize >/dev/null
 fi
